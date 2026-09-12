@@ -193,7 +193,8 @@ const mobileCss = `
 function sendApp(req,res){
   const file=path.join(process.cwd(),'public','index.html');
   let html=fs.readFileSync(file,'utf8');
-  html=html.replace('</head>',mobileCss+'\n</head>');
+  html=html.replace('</head>',mobileCss+'\n<link rel="stylesheet" href="/ux.css?v=3">\n</head>');
+  html=html.replace('</body>','<script src="/ux.js?v=3"></script>\n</body>');
   res.type('html').send(html);
 }
 
