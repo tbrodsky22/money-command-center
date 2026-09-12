@@ -27,7 +27,7 @@ function validateRecord(table,x={}){
  if(table==='assets'){const name=text(x.name);if(!name)throw new Error('Asset name is required');return{name,category:text(x.category)||'Other',value:money(x.value,'Asset value')}}
  if(table==='debts'){const name=text(x.name);if(!name)throw new Error('Debt name is required');return{name,category:text(x.category)||'Other',balance:money(x.balance,'Balance'),apr:bounded(x.apr??0,0,100,'APR'),minimum_payment:money(x.minimum_payment,'Minimum payment')}}
  if(table==='goals'){const name=text(x.name);if(!name)throw new Error('Goal name is required');return{name,target_amount:money(x.target_amount,'Target amount'),current_amount:money(x.current_amount,'Current amount'),target_date:validDate(x.target_date,'Target date')}}
- if(table==='scenarios'){const name=text(x.name)||'Scenario',scenario_type:text(x.scenario_type,60)||'other',payload:x.payload&&typeof x.payload==='object'&&!Array.isArray(x.payload)?x.payload:{};return{name,scenario_type,payload}}
+ if(table==='scenarios'){const name=text(x.name)||'Scenario',scenario_type=text(x.scenario_type,60)||'other',payload=x.payload&&typeof x.payload==='object'&&!Array.isArray(x.payload)?x.payload:{};return{name,scenario_type,payload}}
  throw new Error('Unsupported record type')
 }
 
