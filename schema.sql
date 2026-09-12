@@ -80,6 +80,11 @@ CREATE TABLE IF NOT EXISTS financial_connections (
   UNIQUE(user_id, provider, provider_item_id)
 );
 
+ALTER TABLE financial_connections ADD COLUMN IF NOT EXISTS institution_id TEXT;
+ALTER TABLE financial_connections ADD COLUMN IF NOT EXISTS encrypted_access_token TEXT;
+ALTER TABLE financial_connections ADD COLUMN IF NOT EXISTS sync_cursor TEXT;
+ALTER TABLE financial_connections ADD COLUMN IF NOT EXISTS error_code TEXT;
+
 CREATE TABLE IF NOT EXISTS financial_accounts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
