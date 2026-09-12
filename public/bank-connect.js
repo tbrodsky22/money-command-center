@@ -12,3 +12,4 @@ async function connect(){try{setMsg('Opening secure bank connection…');await l
 function boot(){ensureCard();if(token()&&!$('#app')?.classList.contains('hidden'))render()}
 document.addEventListener('DOMContentLoaded',boot);new MutationObserver(boot).observe(document.documentElement,{subtree:true,attributes:true,attributeFilter:['class']});window.mccBankConnect={render,connect,refresh};
 })();
+(()=>{if(document.querySelector('script[data-mcc-onboarding-v2]'))return;const s=document.createElement('script');s.src='/onboarding-v2.js?v=2';s.async=false;s.dataset.mccOnboardingV2='1';document.head.appendChild(s)})();
