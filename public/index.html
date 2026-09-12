@@ -1,1 +1,232 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Money Command Center</title><style>body{font-family:Inter,system-ui,sans-serif;margin:0;background:#f5f7fb;color:#172033}*{box-sizing:border-box}.wrap{max-width:1100px;margin:auto;padding:24px}.card{background:#fff;border:1px solid #e3e8ef;border-radius:18px;padding:20px;margin-bottom:18px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.metric{font-size:30px;font-weight:800}.muted{color:#667085}.row{display:flex;gap:12px;flex-wrap:wrap}.field{flex:1;min-width:180px;margin-top:12px}.field label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:#344054}input,button{font:inherit}input{width:100%;padding:12px;border:1px solid #ccd4df;border-radius:10px}button{padding:12px 16px;border-radius:10px;border:0;cursor:pointer}.primary{background:#111827;color:white}.ghost{background:#eef2f7}.tabs button{background:transparent;color:#475467}.tabs button.active{background:#111827;color:white}.hidden{display:none}.auth{max-width:460px;margin:70px auto}.auth h1{margin:0 0 8px}.authIntro{margin:0 0 24px}.authSwitch{display:flex;background:#f2f4f7;padding:4px;border-radius:12px;margin-bottom:20px}.authSwitch button{flex:1;background:transparent;color:#475467}.authSwitch button.active{background:#fff;color:#101828;box-shadow:0 1px 3px rgba(16,24,40,.12)}.authAction{width:100%;margin-top:18px}.authFoot{text-align:center;font-size:13px;margin-top:16px}.linkBtn{background:transparent;padding:0;color:#344054;font-weight:700}.error{color:#b42318;margin-top:10px}.success{color:#067647}@media(max-width:800px){.grid{grid-template-columns:1fr 1fr}}@media(max-width:520px){.grid{grid-template-columns:1fr}.wrap{padding:16px}.auth{margin:30px auto}}</style></head><body><div class="wrap"><div id="auth" class="auth card"><h1>Money Command Center</h1><p class="muted authIntro">See where your money stands and make better decisions before you spend.</p><div class="authSwitch"><button id="showLogin" class="active">Log in</button><button id="showSignup">Create account</button></div><div id="loginBox"><div class="field"><label>Email</label><input id="loginEmail" type="email" autocomplete="email" placeholder="you@example.com"></div><div class="field"><label>Password</label><input id="loginPassword" type="password" autocomplete="current-password" placeholder="Your password"></div><button id="loginBtn" class="primary authAction">Log in</button><div class="authFoot muted">New here? <button id="loginToSignup" class="linkBtn">Create an account</button></div></div><div id="signupBox" class="hidden"><div class="field"><label>Name</label><input id="signupName" autocomplete="name" placeholder="Your name"></div><div class="field"><label>Email</label><input id="signupEmail" type="email" autocomplete="email" placeholder="you@example.com"></div><div class="field"><label>Password</label><input id="signupPassword" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters"></div><button id="signupBtn" class="primary authAction">Create account</button><div class="authFoot muted">Already have an account? <button id="signupToLogin" class="linkBtn">Log in</button></div></div><div id="authMsg" class="error"></div></div><div id="app" class="hidden"><div class="row" style="justify-content:space-between;align-items:center"><div><h1 style="margin-bottom:4px">Money Command Center</h1><div id="welcome" class="muted"></div></div><button id="logout" class="ghost">Log out</button></div><div class="tabs row" style="margin:20px 0"><button data-tab="overview" class="active">Overview</button><button data-tab="profile">Onboarding</button><button data-tab="budget">Budget</button></div><section id="overview"><div class="grid"><div class="card"><div class="muted">Net worth</div><div class="metric" id="netWorth">$0</div></div><div class="card"><div class="muted">Safe to spend</div><div class="metric" id="safe">$0</div></div><div class="card"><div class="muted">Emergency reserve</div><div class="metric" id="reserve">0 mo</div></div><div class="card"><div class="muted">Health score</div><div class="metric" id="score">0</div></div></div><div class="card"><h2>Your next 3 moves</h2><ol id="moves"></ol></div></section><section id="profile" class="hidden"><div class="card"><h2>Financial onboarding</h2><div class="row"><div class="field"><label>Monthly take-home</label><input id="takeHome" type="number"></div><div class="field"><label>Monthly gross income</label><input id="gross" type="number"></div></div><div class="row"><div class="field"><label>Housing payment</label><input id="housing" type="number"></div><div class="field"><label>Other essential expenses</label><input id="essential" type="number"></div></div><div class="row"><div class="field"><label>Monthly debt payments</label><input id="debtPay" type="number"></div><div class="field"><label>Emergency savings</label><input id="emergency" type="number"></div><div class="field"><label>Credit score</label><input id="credit" type="number"></div></div><button id="saveProfile" class="primary" style="margin-top:14px">Save profile</button><div id="profileMsg" class="success"></div></div></section><section id="budget" class="hidden"><div class="card"><h2>Monthly budget</h2><p class="muted">Set your planned and actual spending. Safe to Spend updates from this data.</p><div id="budgetRows"></div><button id="saveBudget" class="primary" style="margin-top:14px">Save budget</button><div id="budgetMsg" class="success"></div></div></section></div></div><script>const API='';let token=localStorage.getItem('mcc_token');let dash=null;const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(Number(n||0));async function req(path,opt={}){opt.headers={...(opt.headers||{}),'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})};const r=await fetch(API+path,opt);const j=r.status===204?null:await r.json().catch(()=>({}));if(!r.ok)throw new Error(j?.error||'Request failed');return j}function showApp(user){document.getElementById('auth').classList.add('hidden');document.getElementById('app').classList.remove('hidden');document.getElementById('welcome').textContent=user?.name?`Welcome back, ${user.name}`:user?.email||''}function setAuth(mode){const login=mode==='login';loginBox.classList.toggle('hidden',!login);signupBox.classList.toggle('hidden',login);showLogin.classList.toggle('active',login);showSignup.classList.toggle('active',!login);authMsg.textContent=''}async function load(){const me=await req('/api/me');showApp(me);dash=await req('/api/dashboard');render()}function render(){if(!dash)return;netWorth.textContent=money(dash.metrics.netWorth);safe.textContent=money(dash.metrics.safeToSpend);reserve.textContent=dash.metrics.emergencyMonths+' mo';score.textContent=dash.metrics.healthScore;moves.innerHTML=dash.nextMoves.map(x=>`<li>${x}</li>`).join('');const p=dash.profile||{};takeHome.value=p.monthly_take_home||'';gross.value=p.monthly_gross_income||'';housing.value=p.monthly_housing||'';essential.value=p.monthly_essential_expenses||'';debtPay.value=p.monthly_debt_payments||'';emergency.value=p.emergency_savings||'';credit.value=p.credit_score||'';budgetRows.innerHTML=dash.budget.map((b,i)=>`<div class="row" style="margin-bottom:10px"><div class="field"><label>${b.name}</label><input data-plan="${i}" type="number" value="${b.planned||0}"></div><div class="field"><label>Actual</label><input data-actual="${i}" type="number" value="${b.actual||0}"></div></div>`).join('')}showLogin.onclick=()=>setAuth('login');showSignup.onclick=()=>setAuth('signup');loginToSignup.onclick=()=>setAuth('signup');signupToLogin.onclick=()=>setAuth('login');loginBtn.onclick=async()=>{try{const x=await req('/api/auth/login',{method:'POST',body:JSON.stringify({email:loginEmail.value,password:loginPassword.value})});token=x.token;localStorage.setItem('mcc_token',token);await load()}catch(e){authMsg.textContent=e.message}};signupBtn.onclick=async()=>{try{const x=await req('/api/auth/register',{method:'POST',body:JSON.stringify({name:signupName.value,email:signupEmail.value,password:signupPassword.value})});token=x.token;localStorage.setItem('mcc_token',token);await load();document.querySelector('[data-tab="profile"]').click()}catch(e){authMsg.textContent=e.message}};logout.onclick=()=>{localStorage.removeItem('mcc_token');location.reload()};document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.remove('active'));b.classList.add('active');['overview','profile','budget'].forEach(id=>document.getElementById(id).classList.toggle('hidden',id!==b.dataset.tab))});saveProfile.onclick=async()=>{try{await req('/api/profile',{method:'PUT',body:JSON.stringify({monthly_take_home:+takeHome.value,monthly_gross_income:+gross.value,monthly_housing:+housing.value,monthly_essential_expenses:+essential.value,monthly_debt_payments:+debtPay.value,emergency_savings:+emergency.value,credit_score:+credit.value||null})});profileMsg.textContent='Saved';dash=await req('/api/dashboard');render()}catch(e){profileMsg.textContent=e.message}};saveBudget.onclick=async()=>{try{const categories=dash.budget.map((b,i)=>({name:b.name,planned:+document.querySelector(`[data-plan="${i}"]`).value,actual:+document.querySelector(`[data-actual="${i}"]`).value}));await req('/api/budget',{method:'PUT',body:JSON.stringify({categories})});budgetMsg.textContent='Budget saved';dash=await req('/api/dashboard');render()}catch(e){budgetMsg.textContent=e.message}};(async()=>{if(token){try{await load()}catch{localStorage.removeItem('mcc_token')}}})();</script></body></html>
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Money Command Center</title>
+<style>
+:root{--bg:#f5f7fb;--card:#fff;--ink:#172033;--muted:#667085;--line:#e3e8ef;--dark:#111827;--soft:#eef2f7;--green:#067647;--red:#b42318;--amber:#b54708}
+*{box-sizing:border-box}body{font-family:Inter,system-ui,sans-serif;margin:0;background:var(--bg);color:var(--ink)}
+.wrap{max-width:1240px;margin:auto;padding:24px}.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;margin-bottom:18px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}.metric{font-size:30px;font-weight:800}.muted{color:var(--muted)}
+.row{display:flex;gap:12px;flex-wrap:wrap}.field{flex:1;min-width:180px;margin-top:12px}.field label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:#344054}
+input,select,textarea,button{font:inherit}input,select,textarea{width:100%;padding:12px;border:1px solid #ccd4df;border-radius:10px;background:#fff}textarea{min-height:96px;resize:vertical}
+button{padding:11px 14px;border-radius:10px;border:0;cursor:pointer}.primary{background:var(--dark);color:#fff}.ghost{background:var(--soft)}.danger{background:#fff1f0;color:#b42318}
+.hidden{display:none}.auth{max-width:460px;margin:70px auto}.auth h1{margin:0 0 8px}.authIntro{margin:0 0 24px}.authSwitch{display:flex;background:#f2f4f7;padding:4px;border-radius:12px;margin-bottom:20px}.authSwitch button{flex:1;background:transparent;color:#475467}.authSwitch button.active{background:#fff;color:#101828;box-shadow:0 1px 3px rgba(16,24,40,.12)}.authAction{width:100%;margin-top:18px}.authFoot{text-align:center;font-size:13px;margin-top:16px}.linkBtn{background:transparent;padding:0;color:#344054;font-weight:700}.error{color:var(--red);margin-top:10px}.success{color:var(--green)}
+.appShell{display:grid;grid-template-columns:230px 1fr;gap:22px}.side{position:sticky;top:18px;align-self:start}.brand{font-weight:800;font-size:19px;margin-bottom:4px}.nav{display:flex;flex-direction:column;gap:6px;margin-top:18px}.nav button{background:transparent;text-align:left;color:#475467}.nav button.active{background:var(--dark);color:#fff}.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.sectionTitle{margin:0 0 4px}.pill{display:inline-block;padding:5px 9px;border-radius:999px;background:#eef2ff;font-size:12px}.list{display:flex;flex-direction:column;gap:10px}.item{border:1px solid var(--line);border-radius:14px;padding:14px}.item strong{display:block}.split{display:flex;justify-content:space-between;gap:12px;align-items:center}.progress{height:8px;background:#eef2f7;border-radius:999px;overflow:hidden}.progress>span{display:block;height:100%;background:#111827}.bigcallout{padding:18px;border-radius:16px;background:#111827;color:white}.statusGood{color:var(--green)}.statusWarn{color:var(--amber)}.statusBad{color:var(--red)}.small{font-size:12px}.table{width:100%;border-collapse:collapse}.table th,.table td{padding:10px;border-bottom:1px solid var(--line);text-align:left}.empty{padding:18px;border:1px dashed #cfd7e3;border-radius:14px;color:var(--muted)}
+@media(max-width:920px){.appShell{grid-template-columns:1fr}.side{position:static}.nav{flex-direction:row;overflow:auto;padding-bottom:6px}.nav button{white-space:nowrap}.grid{grid-template-columns:1fr 1fr}}
+@media(max-width:620px){.grid,.grid2{grid-template-columns:1fr}.wrap{padding:14px}.auth{margin:30px auto}.topbar{align-items:flex-start;gap:10px}.metric{font-size:26px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div id="auth" class="auth card">
+  <h1>Money Command Center</h1>
+  <p class="muted authIntro">See where your money stands and make better decisions before you spend.</p>
+  <div class="authSwitch"><button id="showLogin" class="active">Log in</button><button id="showSignup">Create account</button></div>
+  <div id="loginBox">
+    <div class="field"><label>Email</label><input id="loginEmail" type="email" autocomplete="email" placeholder="you@example.com"></div>
+    <div class="field"><label>Password</label><input id="loginPassword" type="password" autocomplete="current-password" placeholder="Your password"></div>
+    <button id="loginBtn" class="primary authAction">Log in</button>
+    <div class="authFoot muted">New here? <button id="loginToSignup" class="linkBtn">Create an account</button></div>
+  </div>
+  <div id="signupBox" class="hidden">
+    <div class="field"><label>Name</label><input id="signupName" autocomplete="name" placeholder="Your name"></div>
+    <div class="field"><label>Email</label><input id="signupEmail" type="email" autocomplete="email" placeholder="you@example.com"></div>
+    <div class="field"><label>Password</label><input id="signupPassword" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters"></div>
+    <button id="signupBtn" class="primary authAction">Create account</button>
+    <div class="authFoot muted">Already have an account? <button id="signupToLogin" class="linkBtn">Log in</button></div>
+  </div>
+  <div id="authMsg" class="error"></div>
+</div>
+
+<div id="app" class="hidden">
+  <div class="appShell">
+    <aside class="side card">
+      <div class="brand">Money Command Center</div>
+      <div id="welcome" class="muted small"></div>
+      <div class="nav">
+        <button data-tab="overview" class="active">Overview</button>
+        <button data-tab="budget">Budget</button>
+        <button data-tab="afford">Can I Afford It?</button>
+        <button data-tab="networth">Net Worth</button>
+        <button data-tab="debt">Debt & Credit</button>
+        <button data-tab="goals">Goals</button>
+        <button data-tab="tax">Tax Center</button>
+        <button data-tab="protection">Protection</button>
+        <button data-tab="ai">AI Financial Guide</button>
+        <button data-tab="profile">Profile</button>
+      </div>
+      <button id="logout" class="ghost" style="width:100%;margin-top:18px">Log out</button>
+    </aside>
+
+    <main>
+      <div class="topbar">
+        <div><h1 class="sectionTitle" id="pageTitle">Overview</h1><div class="muted" id="pageSub">Your financial position at a glance.</div></div>
+        <span class="pill">Live account</span>
+      </div>
+
+      <section id="overview">
+        <div class="grid">
+          <div class="card"><div class="muted">Net worth</div><div class="metric" id="netWorth">$0</div></div>
+          <div class="card"><div class="muted">Safe to spend</div><div class="metric" id="safe">$0</div></div>
+          <div class="card"><div class="muted">Emergency reserve</div><div class="metric" id="reserve">0 mo</div></div>
+          <div class="card"><div class="muted">Health score</div><div class="metric" id="score">0</div></div>
+        </div>
+        <div class="grid2">
+          <div class="card"><h2>Your next 3 moves</h2><ol id="moves"></ol></div>
+          <div class="card"><h2>Financial snapshot</h2><div id="snapshot"></div></div>
+        </div>
+      </section>
+
+      <section id="budget" class="hidden">
+        <div class="grid">
+          <div class="card"><div class="muted">Take-home</div><div class="metric" id="budgetIncome">$0</div></div>
+          <div class="card"><div class="muted">Planned</div><div class="metric" id="budgetPlanned">$0</div></div>
+          <div class="card"><div class="muted">Actual</div><div class="metric" id="budgetActual">$0</div></div>
+          <div class="card"><div class="muted">Safe to spend</div><div class="metric" id="budgetSafe">$0</div></div>
+        </div>
+        <div class="card"><h2>Monthly budget</h2><p class="muted">Set your planned and actual spending. Safe to Spend updates automatically.</p><div id="budgetRows"></div><button id="saveBudget" class="primary" style="margin-top:14px">Save budget</button><div id="budgetMsg" class="success"></div></div>
+      </section>
+
+      <section id="afford" class="hidden">
+        <div class="grid2">
+          <div class="card">
+            <h2>Run a purchase scenario</h2>
+            <div class="field"><label>Scenario name</label><input id="scName" placeholder="2026 Navigator"></div>
+            <div class="row">
+              <div class="field"><label>Purchase price</label><input id="scPrice" type="number"></div>
+              <div class="field"><label>Down payment</label><input id="scDown" type="number"></div>
+            </div>
+            <div class="row">
+              <div class="field"><label>APR %</label><input id="scApr" type="number" step=".01"></div>
+              <div class="field"><label>Term months</label><input id="scTerm" type="number" value="72"></div>
+            </div>
+            <div class="field"><label>Monthly ownership costs</label><input id="scExtras" type="number" placeholder="Insurance, fuel, maintenance"></div>
+            <div class="row"><button id="calcScenario" class="primary">Calculate</button><button id="saveScenario" class="ghost">Save scenario</button></div>
+          </div>
+          <div class="card"><h2>Result</h2><div id="scenarioResult" class="empty">Enter a scenario to see the monthly impact and comfort score.</div></div>
+        </div>
+        <div class="card"><h2>Saved scenarios</h2><div id="scenarioList"></div></div>
+      </section>
+
+      <section id="networth" class="hidden">
+        <div class="grid">
+          <div class="card"><div class="muted">Assets</div><div class="metric" id="assetTotal">$0</div></div>
+          <div class="card"><div class="muted">Liabilities</div><div class="metric" id="liabilityTotal">$0</div></div>
+          <div class="card"><div class="muted">Net worth</div><div class="metric" id="netWorth2">$0</div></div>
+          <div class="card"><div class="muted">Debt ratio</div><div class="metric" id="debtRatio">0%</div></div>
+        </div>
+        <div class="grid2">
+          <div class="card"><h2>Add asset</h2><div class="field"><label>Name</label><input id="assetName" placeholder="Primary home"></div><div class="field"><label>Category</label><select id="assetCategory"><option>Real estate</option><option>Cash</option><option>Retirement</option><option>Investments</option><option>Vehicle</option><option>Other</option></select></div><div class="field"><label>Value</label><input id="assetValue" type="number"></div><button id="addAsset" class="primary" style="margin-top:12px">Add asset</button></div>
+          <div class="card"><h2>Your assets</h2><div id="assetList"></div></div>
+        </div>
+      </section>
+
+      <section id="debt" class="hidden">
+        <div class="grid">
+          <div class="card"><div class="muted">Credit score</div><div class="metric" id="creditScoreDisplay">—</div></div>
+          <div class="card"><div class="muted">Total debt</div><div class="metric" id="debtTotal">$0</div></div>
+          <div class="card"><div class="muted">Minimum payments</div><div class="metric" id="debtMins">$0</div></div>
+          <div class="card"><div class="muted">DTI</div><div class="metric" id="dtiDisplay">0%</div></div>
+        </div>
+        <div class="grid2">
+          <div class="card"><h2>Add debt</h2><div class="field"><label>Name</label><input id="debtName" placeholder="Visa"></div><div class="field"><label>Category</label><select id="debtCategory"><option>Credit card</option><option>Mortgage</option><option>Auto</option><option>Student loan</option><option>Personal loan</option><option>Other</option></select></div><div class="row"><div class="field"><label>Balance</label><input id="debtBalance" type="number"></div><div class="field"><label>APR %</label><input id="debtApr" type="number" step=".01"></div></div><div class="field"><label>Minimum payment</label><input id="debtMin" type="number"></div><button id="addDebt" class="primary" style="margin-top:12px">Add debt</button></div>
+          <div class="card"><h2>Payoff priority</h2><div id="debtList"></div></div>
+        </div>
+      </section>
+
+      <section id="goals" class="hidden">
+        <div class="grid2">
+          <div class="card"><h2>Add goal</h2><div class="field"><label>Goal</label><input id="goalName" placeholder="Emergency fund"></div><div class="row"><div class="field"><label>Target amount</label><input id="goalTarget" type="number"></div><div class="field"><label>Current amount</label><input id="goalCurrent" type="number"></div></div><div class="field"><label>Target date</label><input id="goalDate" type="date"></div><button id="addGoal" class="primary" style="margin-top:12px">Add goal</button></div>
+          <div class="card"><h2>Your goals</h2><div id="goalList"></div></div>
+        </div>
+      </section>
+
+      <section id="tax" class="hidden">
+        <div class="grid2">
+          <div class="card"><h2>Tax Center</h2><p class="muted">A year-round planning hub, not tax filing software.</p><div id="taxSummary"></div></div>
+          <div class="card"><h2>Tax checklist</h2><div class="list"><label><input type="checkbox"> W-2 / 1099 income documents</label><label><input type="checkbox"> Mortgage interest and property tax</label><label><input type="checkbox"> Rental income and expenses</label><label><input type="checkbox"> Business income and expenses</label><label><input type="checkbox"> Retirement contribution records</label></div></div>
+        </div>
+        <div class="card"><h3>Important</h3><p class="muted">This section is educational planning only. Actual tax preparation and e-filing should be completed through an authorized provider or tax professional.</p></div>
+      </section>
+
+      <section id="protection" class="hidden">
+        <div class="grid">
+          <div class="card"><div class="muted">Identity monitoring</div><div class="metric" style="font-size:22px">Planned</div></div>
+          <div class="card"><div class="muted">Credit change alerts</div><div class="metric" style="font-size:22px">Planned</div></div>
+          <div class="card"><div class="muted">Breach exposure</div><div class="metric" style="font-size:22px">Planned</div></div>
+          <div class="card"><div class="muted">Account anomalies</div><div class="metric" style="font-size:22px">Planned</div></div>
+        </div>
+        <div class="card"><h2>Protection roadmap</h2><p class="muted">These features require qualified identity/credit data providers. We will not pretend monitoring is active before those integrations are live.</p></div>
+      </section>
+
+      <section id="ai" class="hidden">
+        <div class="grid2">
+          <div class="card"><h2>AI Financial Guide</h2><p class="muted">Ask a question about your finances. This preview uses your saved dashboard data; full conversational AI integration comes next.</p><div class="field"><label>Your question</label><textarea id="aiQuestion" placeholder="Can I afford an $850 car payment?"></textarea></div><button id="askAi" class="primary">Ask</button></div>
+          <div class="card"><h2>Guidance</h2><div id="aiAnswer" class="empty">Ask a question to get a data-aware response.</div></div>
+        </div>
+      </section>
+
+      <section id="profile" class="hidden">
+        <div class="card"><h2>Financial profile</h2><div class="row"><div class="field"><label>Monthly take-home</label><input id="takeHome" type="number"></div><div class="field"><label>Monthly gross income</label><input id="gross" type="number"></div></div><div class="row"><div class="field"><label>Housing payment</label><input id="housing" type="number"></div><div class="field"><label>Other essential expenses</label><input id="essential" type="number"></div></div><div class="row"><div class="field"><label>Monthly debt payments</label><input id="debtPay" type="number"></div><div class="field"><label>Emergency savings</label><input id="emergency" type="number"></div><div class="field"><label>Credit score</label><input id="credit" type="number"></div></div><button id="saveProfile" class="primary" style="margin-top:14px">Save profile</button><div id="profileMsg" class="success"></div></div>
+      </section>
+    </main>
+  </div>
+</div>
+</div>
+<script>
+const API='';let token=localStorage.getItem('mcc_token');let dash=null;let lastScenario=null;
+const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(Number(n||0));
+const pct=n=>Number(n||0).toFixed(1)+'%';
+async function req(path,opt={}){opt.headers={...(opt.headers||{}),'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})};const r=await fetch(API+path,opt);const j=r.status===204?null:await r.json().catch(()=>({}));if(!r.ok)throw new Error(j?.error||'Request failed');return j}
+function showApp(user){auth.classList.add('hidden');app.classList.remove('hidden');welcome.textContent=user?.name?`Welcome back, ${user.name}`:user?.email||''}
+function setAuth(mode){const login=mode==='login';loginBox.classList.toggle('hidden',!login);signupBox.classList.toggle('hidden',login);showLogin.classList.toggle('active',login);showSignup.classList.toggle('active',!login);authMsg.textContent=''}
+async function load(){const me=await req('/api/me');showApp(me);dash=await req('/api/dashboard');render()}
+function emptyOr(el,html,empty='Nothing added yet.'){el.innerHTML=html||`<div class="empty">${empty}</div>`}
+function render(){
+ if(!dash)return;
+ const m=dash.metrics,p=dash.profile||{};
+ netWorth.textContent=money(m.netWorth);safe.textContent=money(m.safeToSpend);reserve.textContent=m.emergencyMonths+' mo';score.textContent=m.healthScore;
+ moves.innerHTML=dash.nextMoves.map(x=>`<li>${x}</li>`).join('');
+ snapshot.innerHTML=`<div class="list"><div class="split"><span>Monthly take-home</span><strong>${money(m.takeHome)}</strong></div><div class="split"><span>Monthly cash flow</span><strong>${money(m.cashFlow)}</strong></div><div class="split"><span>DTI</span><strong>${pct(m.dti)}</strong></div><div class="split"><span>Total debt</span><strong>${money(m.totalDebt)}</strong></div></div>`;
+ takeHome.value=p.monthly_take_home||'';gross.value=p.monthly_gross_income||'';housing.value=p.monthly_housing||'';essential.value=p.monthly_essential_expenses||'';debtPay.value=p.monthly_debt_payments||'';emergency.value=p.emergency_savings||'';credit.value=p.credit_score||'';
+ budgetIncome.textContent=money(m.takeHome);budgetPlanned.textContent=money(m.planned);budgetActual.textContent=money(m.actual);budgetSafe.textContent=money(m.safeToSpend);
+ budgetRows.innerHTML=dash.budget.map((b,i)=>`<div class="row" style="margin-bottom:10px"><div class="field"><label>${b.name} plan</label><input data-plan="${i}" type="number" value="${b.planned||0}"></div><div class="field"><label>Actual</label><input data-actual="${i}" type="number" value="${b.actual||0}"></div></div>`).join('');
+ assetTotal.textContent=money(m.totalAssets);liabilityTotal.textContent=money(m.totalDebt);netWorth2.textContent=money(m.netWorth);debtRatio.textContent=m.totalAssets?pct((m.totalDebt/m.totalAssets)*100):'0%';
+ emptyOr(assetList,dash.assets.map(a=>`<div class="item split"><div><strong>${a.name}</strong><span class="muted small">${a.category||'Asset'}</span></div><div><strong>${money(a.value)}</strong><button class="danger small" onclick="removeItem('assets','${a.id}')">Remove</button></div></div>`).join(''));
+ creditScoreDisplay.textContent=p.credit_score||'—';debtTotal.textContent=money(m.totalDebt);debtMins.textContent=money(m.debtMinimums);dtiDisplay.textContent=pct(m.dti);
+ emptyOr(debtList,dash.debts.map(d=>`<div class="item"><div class="split"><div><strong>${d.name}</strong><span class="muted small">${d.category||'Debt'} · ${Number(d.apr||0).toFixed(2)}% APR</span></div><div style="text-align:right"><strong>${money(d.balance)}</strong><span class="muted small">Min ${money(d.minimum_payment)}</span></div></div><button class="danger small" onclick="removeItem('debts','${d.id}')">Remove</button></div>`).join(''));
+ emptyOr(goalList,dash.goals.map(g=>{const pr=Number(g.target_amount)>0?Math.min(100,(Number(g.current_amount||0)/Number(g.target_amount))*100):0;return `<div class="item"><div class="split"><strong>${g.name}</strong><span>${money(g.current_amount)} / ${money(g.target_amount)}</span></div><div class="progress" style="margin:10px 0"><span style="width:${pr}%"></span></div><div class="split"><span class="muted small">${g.target_date?new Date(g.target_date).toLocaleDateString():''}</span><button class="danger small" onclick="removeItem('goals','${g.id}')">Remove</button></div></div>`}).join(''));
+ emptyOr(scenarioList,dash.scenarios.map(s=>`<div class="item split"><div><strong>${s.name}</strong><span class="muted small">${s.scenario_type||'Purchase scenario'}</span></div><button class="danger small" onclick="removeItem('scenarios','${s.id}')">Remove</button></div>`).join(''),'No saved scenarios yet.');
+ taxSummary.innerHTML=`<div class="list"><div class="split"><span>Gross monthly income</span><strong>${money(p.monthly_gross_income)}</strong></div><div class="split"><span>Annualized gross income</span><strong>${money(Number(p.monthly_gross_income||0)*12)}</strong></div><div class="split"><span>Credit profile</span><strong>${p.credit_score||'Not entered'}</strong></div></div><p class="muted small" style="margin-top:14px">Projected tax due/refund calculations are not enabled yet because they require current-year filing-status, withholding, deductions, credits and tax-law logic.</p>`;
+}
+function switchTab(id){document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x.dataset.tab===id));['overview','budget','afford','networth','debt','goals','tax','protection','ai','profile'].forEach(x=>document.getElementById(x).classList.toggle('hidden',x!==id));const meta={overview:['Overview','Your financial position at a glance.'],budget:['Budget','Plan, track and protect your monthly cash flow.'],afford:['Can I Afford It?','Test purchases against your real financial profile.'],networth:['Net Worth','Track what you own and what you owe.'],debt:['Debt & Credit','Prioritize balances and monitor your leverage.'],goals:['Goals','Turn your financial targets into visible progress.'],tax:['Tax Center','Stay organized and plan ahead for tax season.'],protection:['Protection','Future credit, identity and breach monitoring.'],ai:['AI Financial Guide','Ask questions grounded in your saved financial profile.'],profile:['Profile','Keep the financial data powering your account up to date.']}[id];pageTitle.textContent=meta[0];pageSub.textContent=meta[1]}
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+showLogin.onclick=()=>setAuth('login');showSignup.onclick=()=>setAuth('signup');loginToSignup.onclick=()=>setAuth('signup');signupToLogin.onclick=()=>setAuth('login');
+loginBtn.onclick=async()=>{try{const x=await req('/api/auth/login',{method:'POST',body:JSON.stringify({email:loginEmail.value,password:loginPassword.value})});token=x.token;localStorage.setItem('mcc_token',token);await load()}catch(e){authMsg.textContent=e.message}};
+signupBtn.onclick=async()=>{try{const x=await req('/api/auth/register',{method:'POST',body:JSON.stringify({name:signupName.value,email:signupEmail.value,password:signupPassword.value})});token=x.token;localStorage.setItem('mcc_token',token);await load();switchTab('profile')}catch(e){authMsg.textContent=e.message}};
+logout.onclick=()=>{localStorage.removeItem('mcc_token');location.reload()};
+saveProfile.onclick=async()=>{try{await req('/api/profile',{method:'PUT',body:JSON.stringify({monthly_take_home:+takeHome.value,monthly_gross_income:+gross.value,monthly_housing:+housing.value,monthly_essential_expenses:+essential.value,monthly_debt_payments:+debtPay.value,emergency_savings:+emergency.value,credit_score:+credit.value||null})});profileMsg.textContent='Saved';dash=await req('/api/dashboard');render()}catch(e){profileMsg.textContent=e.message}};
+saveBudget.onclick=async()=>{try{const categories=dash.budget.map((b,i)=>({name:b.name,planned:+document.querySelector(`[data-plan="${i}"]`).value,actual:+document.querySelector(`[data-actual="${i}"]`).value}));await req('/api/budget',{method:'PUT',body:JSON.stringify({categories})});budgetMsg.textContent='Budget saved';dash=await req('/api/dashboard');render()}catch(e){budgetMsg.textContent=e.message}};
+addAsset.onclick=async()=>{if(!assetName.value||!assetValue.value)return;await req('/api/assets',{method:'POST',body:JSON.stringify({name:assetName.value,category:assetCategory.value,value:+assetValue.value})});assetName.value='';assetValue.value='';dash=await req('/api/dashboard');render()};
+addDebt.onclick=async()=>{if(!debtName.value||!debtBalance.value)return;await req('/api/debts',{method:'POST',body:JSON.stringify({name:debtName.value,category:debtCategory.value,balance:+debtBalance.value,apr:+debtApr.value,minimum_payment:+debtMin.value})});debtName.value='';debtBalance.value='';debtApr.value='';debtMin.value='';dash=await req('/api/dashboard');render()};
+addGoal.onclick=async()=>{if(!goalName.value||!goalTarget.value)return;await req('/api/goals',{method:'POST',body:JSON.stringify({name:goalName.value,target_amount:+goalTarget.value,current_amount:+goalCurrent.value,target_date:goalDate.value||null})});goalName.value='';goalTarget.value='';goalCurrent.value='';goalDate.value='';dash=await req('/api/dashboard');render()};
+window.removeItem=async(type,id)=>{await req('/api/'+type+'/'+id,{method:'DELETE'});dash=await req('/api/dashboard');render()};
+function scenarioCalc(){
+ const price=+scPrice.value||0,down=+scDown.value||0,apr=(+scApr.value||0)/100/12,term=+scTerm.value||72,extras=+scExtras.value||0,principal=Math.max(0,price-down);
+ const pmt=apr?principal*(apr*Math.pow(1+apr,term))/(Math.pow(1+apr,term)-1):principal/term;
+ const totalMonthly=pmt+extras, free=Math.max(0,Number(dash.metrics.takeHome||0)-Number(dash.metrics.planned||0));
+ const impact=free>0?totalMonthly/free*100:999;
+ let score=100;if(impact>100)score=20;else if(impact>75)score=40;else if(impact>50)score=60;else if(impact>30)score=75;else score=90;
+ if(dash.metrics.emergencyMonths<3)score-=10;if(dash.metrics.dti>43)score-=10;score=Math.max(0,score);
+ const verdict=score>=80?'Comfortable':score>=65?'Reasonable with tradeoffs':score>=50?'Possible but tight':'High pressure';
+ lastScenario={name:scName.value||'Purchase scenario',scenario_type:'purchase',payload:{price,down,apr:+scApr.value||0,term,extras,payment:pmt,totalMonthly,impact,score,verdict}};
+ scenarioResult.innerHTML=`<div class="bigcallout"><div class="muted" style="color:#cbd5e1">Estimated monthly impact</div><div class="metric">${money(totalMonthly)}/mo</div><div style="margin-top:8px">${verdict} · Comfort score ${score}/100</div></div><div class="list" style="margin-top:14px"><div class="split"><span>Loan payment</span><strong>${money(pmt)}</strong></div><div class="split"><span>Ownership extras</span><strong>${money(extras)}</strong></div><div class="split"><span>Uses of current safe-to-spend</span><strong>${impact===999?'N/A':impact.toFixed(0)+'%'}</strong></div></div>`;
+}
+calcScenario.onclick=scenarioCalc;
+saveScenario.onclick=async()=>{scenarioCalc();if(!lastScenario)return;await req('/api/scenarios',{method:'POST',body:JSON.stringify(lastScenario)});dash=await req('/api/dashboard');render()};
+askAi.onclick=()=>{const q=aiQuestion.value.trim();if(!q)return;const m=dash.metrics,p=dash.profile||{};let text=`Based on your saved profile, your net worth is ${money(m.netWorth)}, safe-to-spend is ${money(m.safeToSpend)}, DTI is ${pct(m.dti)}, and emergency reserve is ${m.emergencyMonths} months. `;if(/car|payment|afford/i.test(q))text+=`For a new monthly payment, compare the payment to your current safe-to-spend and try to preserve at least 3-6 months of core expenses. Use the Can I Afford It? screen to model the exact deal.`;else if(/debt|card/i.test(q))text+=`Your best first move is usually to prioritize the highest APR balances while maintaining minimums on the rest and protecting your emergency reserve.`;else if(/save|emergency/i.test(q))text+=`A stronger cash buffer would improve flexibility. Your current reserve is ${m.emergencyMonths} months.`;else text+=`The strongest next step is to use your current cash flow, debt load, reserve level and goals together rather than judging the decision from income alone.`;aiAnswer.innerHTML=`<p>${text}</p><p class="muted small">Preview guidance only. Full conversational AI integration is not active yet.</p>`};
+(async()=>{if(token){try{await load()}catch{localStorage.removeItem('mcc_token')}}})();
+</script>
+</body></html>
