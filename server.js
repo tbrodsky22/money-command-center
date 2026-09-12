@@ -147,10 +147,61 @@ crud('debts',['name','category','balance','apr','minimum_payment']);
 crud('goals',['name','target_amount','current_amount','target_date']);
 crud('scenarios',['name','scenario_type','payload']);
 
-app.use(express.static(path.join(process.cwd(),'public')));
+const mobileCss = `
+<style id="mobile-layout-fix">
+@media(max-width:920px){
+  html,body{max-width:100%;overflow-x:hidden}
+  .wrap{max-width:none!important;width:100%!important;padding:14px!important}
+  .appShell{display:block!important}
+  .side{position:static!important;width:100%!important;margin-bottom:14px!important;padding:14px!important}
+  .nav{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important;overflow:visible!important;padding:0!important}
+  .nav button{width:100%!important;text-align:center!important;white-space:normal!important;min-height:44px!important;padding:10px 8px!important}
+  main{min-width:0!important;width:100%!important}
+  .grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .grid2{grid-template-columns:1fr!important}
+  .card{padding:16px!important;border-radius:16px!important}
+  .table{display:block!important;width:100%!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch!important}
+}
+@media(max-width:620px){
+  .wrap{padding:10px!important}
+  .auth{margin:18px auto!important;padding:18px!important}
+  .topbar{align-items:flex-start!important;gap:10px!important}
+  .sectionTitle{font-size:24px!important;line-height:1.15!important}
+  .grid,.grid2{grid-template-columns:1fr!important}
+  .metric{font-size:25px!important;overflow-wrap:anywhere!important}
+  .row{display:block!important}
+  .field{min-width:0!important;width:100%!important;margin-top:10px!important}
+  input,select,textarea{font-size:16px!important}
+  button{min-height:44px}
+  .split{align-items:flex-start!important;flex-direction:column!important}
+  .split>button{width:100%!important}
+  .nav{grid-template-columns:1fr 1fr!important}
+  .nav button{font-size:13px!important}
+  .item{padding:12px!important}
+  .bigcallout{padding:16px!important}
+  .card h2{font-size:20px!important;margin-top:0}
+  .card h3{font-size:17px!important}
+  #logout{margin-top:12px!important}
+}
+@media(max-width:380px){
+  .nav{grid-template-columns:1fr!important}
+  .topbar{display:block!important}
+  .topbar .pill{margin-top:8px!important}
+}
+</style>`;
+
+function sendApp(req,res){
+  const file=path.join(process.cwd(),'public','index.html');
+  let html=fs.readFileSync(file,'utf8');
+  html=html.replace('</head>',mobileCss+'\n</head>');
+  res.type('html').send(html);
+}
+
+app.get('/',sendApp);
+app.use(express.static(path.join(process.cwd(),'public'),{index:false}));
 app.get('*',(req,res,next)=>{
   if(req.path.startsWith('/api/')||req.path==='/health') return next();
-  res.sendFile(path.join(process.cwd(),'public','index.html'));
+  sendApp(req,res);
 });
 app.use((err,req,res,next)=>{ console.error(err); res.status(500).json({error:'Unexpected server error'}); });
 
