@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import pg from 'pg';
 import fs from 'fs';
+import path from 'path';
 
 const { Pool } = pg;
 const app = express();
@@ -74,11 +75,7 @@ async function getDashboard(userId){
   if(!moves.length) moves.push('Keep your savings plan automated and review spending weekly.');
   moves.push('Use Can I Afford It? before adding any new recurring payment.');
   moves.push('Review net worth and goal progress monthly.');
-  return {
-    profile, assets, debts, budget, goals:g.rows, scenarios:s.rows,
-    metrics:{totalAssets,totalDebt,netWorth:totalAssets-totalDebt,debtMinimums,planned,actual,takeHome,cashFlow,dti:Number(dti.toFixed(1)),emergencyMonths:Number(emergencyMonths.toFixed(1)),safeToSpend,healthScore:score},
-    nextMoves:moves.slice(0,3)
-  };
+  return {profile,assets,debts,budget,goals:g.rows,scenarios:s.rows,metrics:{totalAssets,totalDebt,netWorth:totalAssets-totalDebt,debtMinimums,planned,actual,takeHome,cashFlow,dti:Number(dti.toFixed(1)),emergencyMonths:Number(emergencyMonths.toFixed(1)),safeToSpend,healthScore:score},nextMoves:moves.slice(0,3)};
 }
 
 app.get('/health',(req,res)=>res.json({ok:true,service:'money-command-center-api'}));
@@ -150,6 +147,11 @@ crud('debts',['name','category','balance','apr','minimum_payment']);
 crud('goals',['name','target_amount','current_amount','target_date']);
 crud('scenarios',['name','scenario_type','payload']);
 
+app.use(express.static(path.join(process.cwd(),'public')));
+app.get('*',(req,res,next)=>{
+  if(req.path.startsWith('/api/')||req.path==='/health') return next();
+  res.sendFile(path.join(process.cwd(),'public','index.html'));
+});
 app.use((err,req,res,next)=>{ console.error(err); res.status(500).json({error:'Unexpected server error'}); });
 
 initDb().then(()=>app.listen(port,'0.0.0.0',()=>console.log(`Money Command Center API listening on ${port}`))).catch(e=>{console.error('DB init failed',e);process.exit(1)});
