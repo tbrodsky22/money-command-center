@@ -1,24 +1,210 @@
-(()=>{
-const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(Number(n||0));
-const token=()=>localStorage.getItem('mcc_token')||'';
-let dataCache=null,insight=null;
-async function api(path,opts={}){const r=await fetch(path,{...opts,headers:{'Content-Type':'application/json',...(opts.headers||{}),Authorization:'Bearer '+token()}}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Request failed');return d}
-const norm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
-const date=v=>new Date(String(v).slice(0,10)+'T12:00:00');
-const monthKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-function isTransfer(t){const c=norm(t.category),n=norm((t.merchant_name||'')+' '+(t.name||''));return c.includes('transfer')||/credit card payment|online transfer|internal transfer|ach transfer/.test(n)}
-const outflow=t=>!t.pending&&!t.excluded&&!isTransfer(t)&&Number(t.amount)>0;
-const inflow=t=>!t.pending&&!t.excluded&&Number(t.amount)<0;
-function recurring(tx){const g={};tx.filter(outflow).forEach(t=>{const k=norm(t.merchant_name||t.name);if(k)(g[k]??=[]).push(t)});const out=[];Object.values(g).forEach(rows=>{if(rows.length<2)return;rows.sort((a,b)=>date(a.posted_date)-date(b.posted_date));const vals=rows.map(r=>Number(r.amount)),avg=vals.reduce((s,x)=>s+x,0)/vals.length;if(!vals.every(x=>Math.abs(x-avg)/Math.max(avg,1)<.25))return;const gaps=[];for(let i=1;i<rows.length;i++)gaps.push(Math.round((date(rows[i].posted_date)-date(rows[i-1].posted_date))/86400000));if(!gaps.length)return;gaps.sort((a,b)=>a-b);const gap=gaps[Math.floor(gaps.length/2)];let cadence;if(gap>=25&&gap<=38)cadence='monthly';else if(gap>=12&&gap<=18)cadence='biweekly';else if(gap>=5&&gap<=9)cadence='weekly';else return;const last=rows.at(-1),next=new Date(date(last.posted_date));next.setDate(next.getDate()+gap);out.push({name:last.merchant_name||last.name,average:avg,cadence,next})});return out}
-function compute(data,dashboard){const tx=data.transactions||[],accounts=data.accounts||[],now=new Date(),mk=monthKey(now),pmk=monthKey(new Date(now.getFullYear(),now.getMonth()-1,1));let spend=0,prev=0,income=0;const cats={};tx.forEach(t=>{const k=monthKey(date(t.posted_date));if(k===mk&&outflow(t)){spend+=Number(t.amount);cats[t.category||'Uncategorized']=(cats[t.category||'Uncategorized']||0)+Number(t.amount)}if(k===pmk&&outflow(t))prev+=Number(t.amount);if(k===mk&&inflow(t))income+=Math.abs(Number(t.amount))});const rec=recurring(tx),end=new Date(now.getFullYear(),now.getMonth()+1,0,23,59,59),upcoming=rec.filter(r=>r.next>=now&&r.next<=end),upcomingBills=upcoming.reduce((s,r)=>s+r.average,0);const liquid=accounts.filter(a=>['depository','checking','savings','cash management','money market'].includes(norm(a.account_type))||['checking','savings','cash management','money market'].includes(norm(a.account_subtype))).reduce((s,a)=>s+Number(a.available_balance??a.current_balance??0),0);const take=Number(dashboard?.profile?.monthly_take_home||0),buffer=Math.max(250,Math.min(Math.max(liquid,0)*.15,take*.1||500)),safe=Math.max(0,liquid-upcomingBills-buffer),avg=tx.filter(outflow).reduce((s,t)=>s+Number(t.amount),0)/Math.max(1,tx.filter(outflow).length),unusual=tx.filter(t=>outflow(t)&&Number(t.amount)>Math.max(100,avg*3)).slice(0,5);return{spend,prev,income,cats,upcoming,upcomingBills,liquid,buffer,safe,unusual,change:prev?((spend-prev)/prev)*100:null}}
-function ensureSection(){if($('#transactions'))return;const nav=$('.nav');if(!nav)return;const b=document.createElement('button');b.dataset.tab='transactions';b.textContent='Transactions';nav.querySelector('[data-tab="budget"]')?.after(b);b.onclick=show;$$('.nav button:not([data-tab="transactions"])').forEach(x=>x.addEventListener('click',()=>$('#transactions')?.classList.add('hidden')));const s=document.createElement('section');s.id='transactions';s.className='hidden';s.innerHTML=`<div class="grid"><div class="card"><div class="muted">Spent this month</div><div class="metric" id="biSpend">$0</div><div class="small muted" id="biCompare"></div></div><div class="card"><div class="muted">Income detected</div><div class="metric" id="biIncome">$0</div></div><div class="card"><div class="muted">Recurring ahead</div><div class="metric" id="biRecurring">$0</div></div><div class="card"><div class="muted">Live safe to spend</div><div class="metric" id="biSafe">$0</div><div class="small muted">Estimate after expected recurring charges and a buffer</div></div></div><div class="grid2"><div class="card"><h2>Spending by category</h2><div id="biCats" class="list"></div></div><div class="card"><h2>Money Watch</h2><div id="biWatch" class="list"></div></div></div><div class="card"><div class="split"><div><h2 style="margin:0">Transactions</h2><p class="muted small">Search, recategorize, or exclude transfers.</p></div><button id="biSync" class="ghost">Sync bank</button></div><div class="row"><div class="field"><input id="biSearch" placeholder="Search merchant or transaction"></div><div class="field"><select id="biFilter"><option value="all">All transactions</option><option value="spend">Spending</option><option value="income">Income</option><option value="transfer">Transfers / excluded</option></select></div></div><div id="biList" class="list" style="margin-top:14px"></div></div>`;document.querySelector('main')?.appendChild(s);$('#biSearch').oninput=renderTx;$('#biFilter').onchange=renderTx;$('#biSync').onclick=async()=>{try{await api('/api/plaid/sync',{method:'POST'});await load()}catch(e){alert(e.message)}}}
-function ensureHome(){const overview=$('#overview');if(!overview||$('#biHome'))return;const c=document.createElement('div');c.id='biHome';c.className='card';c.style.display='none';c.innerHTML=`<div class="split"><div><span class="pill">Live money intelligence</span><h2 style="margin:8px 0 4px">What your accounts are telling us</h2><div class="muted">Based on synced balances and transaction history.</div></div><button id="biOpen" class="ghost">See transactions</button></div><div class="grid" style="margin-top:16px"><div><div class="muted small">Spent this month</div><strong id="biHomeSpend" style="font-size:22px"></strong></div><div><div class="muted small">Income detected</div><strong id="biHomeIncome" style="font-size:22px"></strong></div><div><div class="muted small">Recurring ahead</div><strong id="biHomeRecurring" style="font-size:22px"></strong></div><div><div class="muted small">Estimated safe to spend</div><strong id="biHomeSafe" style="font-size:22px"></strong></div></div><div id="biHomeNote" class="muted small" style="margin-top:12px"></div>`;const bank=$('#bankConnectCard');bank?.after(c);$('#biOpen').onclick=show}
-function show(){ensureSection();$$('main > section').forEach(x=>x.classList.add('hidden'));$('#transactions').classList.remove('hidden');$$('.nav button').forEach(x=>x.classList.toggle('active',x.dataset.tab==='transactions'));if($('#pageTitle'))$('#pageTitle').textContent='Transactions';if($('#pageSub'))$('#pageSub').textContent='See where your money went and teach the app what counts.';renderTx();window.scrollTo({top:0,behavior:'smooth'})}
-function payload(t,over={}){return{name:t.name,account_id:t.account_id,posted_date:String(t.posted_date).slice(0,10),authorized_date:t.authorized_date?String(t.authorized_date).slice(0,10):null,merchant_name:t.merchant_name,amount:Number(t.amount),category:t.category,pending:Boolean(t.pending),recurring:Boolean(t.recurring),excluded:Boolean(t.excluded),notes:t.notes,...over}}
-async function update(t,over){await api('/api/financial-data/transactions/'+t.id,{method:'PUT',body:JSON.stringify(payload(t,over))});Object.assign(t,over);insight=compute(dataCache,window.__mccDashboard||{});renderAll()}
-function renderTx(){if(!dataCache||!insight||!$('#transactions'))return;$('#biSpend').textContent=money(insight.spend);$('#biIncome').textContent=money(insight.income);$('#biRecurring').textContent=money(insight.upcomingBills);$('#biSafe').textContent=money(insight.safe);$('#biCompare').textContent=insight.change===null?'Need more history to compare':`${Math.abs(insight.change).toFixed(0)}% ${insight.change>0?'more':'less'} than last month so far`;const cats=Object.entries(insight.cats).sort((a,b)=>b[1]-a[1]).slice(0,8);$('#biCats').innerHTML=cats.length?cats.map(([c,v])=>`<div class="item split"><span>${c}</span><strong>${money(v)}</strong></div>`).join(''):'<div class="empty">No categorized spending yet.</div>';const watch=[];insight.upcoming.slice(0,5).forEach(r=>watch.push(`<div class="item"><strong>${r.name}</strong><span class="muted small">Likely ${money(r.average)} ${r.cadence} · next around ${r.next.toLocaleDateString()}</span></div>`));insight.unusual.slice(0,3).forEach(t=>watch.push(`<div class="item"><strong>Large transaction: ${t.merchant_name||t.name}</strong><span class="muted small">${money(t.amount)} on ${date(t.posted_date).toLocaleDateString()}</span></div>`));$('#biWatch').innerHTML=watch.join('')||'<div class="empty">No notable patterns yet.</div>';const q=norm($('#biSearch')?.value),f=$('#biFilter')?.value||'all',rows=(dataCache.transactions||[]).filter(t=>{const h=norm((t.merchant_name||'')+' '+t.name+' '+(t.category||''));if(q&&!h.includes(q))return false;if(f==='spend'&&!outflow(t))return false;if(f==='income'&&!inflow(t))return false;if(f==='transfer'&&!(t.excluded||isTransfer(t)))return false;return true}).slice(0,150),catsOpt=['Food & Dining','Groceries','Shopping','Transportation','Housing','Utilities','Entertainment','Health','Travel','Income','Transfer','Other'];$('#biList').innerHTML=rows.length?rows.map(t=>`<div class="item"><div class="split"><div><strong>${t.merchant_name||t.name}</strong><span class="muted small">${date(t.posted_date).toLocaleDateString()}${t.pending?' · Pending':''}${t.excluded?' · Excluded':''}</span></div><strong>${Number(t.amount)<0?'+':''}${money(Math.abs(Number(t.amount)))}</strong></div><div class="row" style="margin-top:9px"><div class="field" style="margin:0"><select data-bi-cat="${t.id}">${catsOpt.map(c=>`<option ${t.category===c?'selected':''}>${c}</option>`).join('')}</select></div><button class="ghost" data-bi-ex="${t.id}">${t.excluded?'Count in spending':'Mark transfer / exclude'}</button></div></div>`).join(''):'<div class="empty">No transactions match.</div>';rows.forEach(t=>{const c=document.querySelector(`[data-bi-cat="${t.id}"]`),e=document.querySelector(`[data-bi-ex="${t.id}"]`);if(c)c.onchange=()=>update(t,{category:c.value});if(e)e.onclick=()=>update(t,{excluded:!t.excluded,category:!t.excluded?'Transfer':t.category})})}
-function renderAll(){ensureHome();if(!dataCache?.summary?.connected){if($('#biHome'))$('#biHome').style.display='none';return}$('#biHome').style.display='block';$('#biHomeSpend').textContent=money(insight.spend);$('#biHomeIncome').textContent=money(insight.income);$('#biHomeRecurring').textContent=money(insight.upcomingBills);$('#biHomeSafe').textContent=money(insight.safe);$('#biHomeNote').textContent=insight.change===null?'We’ll compare months as more history builds.':`Spending is ${Math.abs(insight.change).toFixed(0)}% ${insight.change>0?'higher':'lower'} than last month so far.`;if($('#safe'))$('#safe').textContent=money(insight.safe);if($('#budgetSafe'))$('#budgetSafe').textContent=money(insight.safe);renderTx()}
-async function load(){if(!token())return;ensureSection();ensureHome();try{const [data,dash]=await Promise.all([api('/api/financial-data'),api('/api/dashboard')]);dataCache=data;window.__mccDashboard=dash;insight=compute(data,dash);window.__mccBankIntelligence={data,insight};renderAll()}catch(e){console.warn('Bank intelligence',e)}}
-function boot(){if(!document.querySelector('.nav'))return;ensureSection();ensureHome();if(!$('#app')?.classList.contains('hidden'))load()}
-document.addEventListener('DOMContentLoaded',boot);new MutationObserver(boot).observe(document.documentElement,{subtree:true,attributes:true,attributeFilter:['class']});
+(function () {
+  const token = () => localStorage.getItem('mcc_token') || '';
+
+  function formatMoney(value) {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0
+    }).format(Number(value || 0));
+  }
+
+  function classify(transaction) {
+    const text = `${transaction.category || ''} ${transaction.merchant_name || ''} ${transaction.name || ''}`.toLowerCase();
+    if (text.includes('transfer') || text.includes('credit card payment') || text.includes('ach payment')) return 'Transfer';
+    if (text.includes('payroll') || text.includes('direct deposit') || text.includes('salary')) return 'Income';
+    if (text.includes('grocery') || text.includes('supermarket')) return 'Groceries';
+    if (text.includes('restaurant') || text.includes('dining') || text.includes('coffee') || text.includes('doordash')) return 'Food & Dining';
+    if (text.includes('gas') || text.includes('fuel') || text.includes('uber') || text.includes('lyft')) return 'Transportation';
+    if (text.includes('amazon') || text.includes('walmart') || text.includes('target') || text.includes('shopping')) return 'Shopping';
+    if (text.includes('mortgage') || text.includes('rent')) return 'Housing';
+    if (text.includes('electric') || text.includes('utility') || text.includes('internet') || text.includes('wireless')) return 'Utilities';
+    if (text.includes('netflix') || text.includes('spotify') || text.includes('hulu') || text.includes('movie')) return 'Entertainment';
+    if (text.includes('pharmacy') || text.includes('medical') || text.includes('doctor')) return 'Health';
+    if (text.includes('airline') || text.includes('hotel') || text.includes('airbnb')) return 'Travel';
+    return transaction.category || 'Other';
+  }
+
+  function isTransfer(transaction) {
+    return Boolean(transaction.excluded) || classify(transaction) === 'Transfer';
+  }
+
+  function isSpend(transaction) {
+    return !transaction.pending && !isTransfer(transaction) && Number(transaction.amount) > 0;
+  }
+
+  function isIncome(transaction) {
+    return !transaction.pending && !transaction.excluded && Number(transaction.amount) < 0 && classify(transaction) === 'Income';
+  }
+
+  function transactionDate(value) {
+    return new Date(String(value).slice(0, 10) + 'T12:00:00');
+  }
+
+  function monthKey(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  function recurringPatterns(transactions) {
+    const groups = new Map();
+    for (const transaction of transactions.filter(isSpend)) {
+      const key = String(transaction.merchant_name || transaction.name || '').toLowerCase().trim();
+      if (!key) continue;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(transaction);
+    }
+
+    const patterns = [];
+    for (const rows of groups.values()) {
+      if (rows.length < 2) continue;
+      rows.sort((a, b) => transactionDate(a.posted_date) - transactionDate(b.posted_date));
+      const amounts = rows.map(row => Number(row.amount));
+      const average = amounts.reduce((sum, amount) => sum + amount, 0) / amounts.length;
+      const stableAmounts = amounts.every(amount => Math.abs(amount - average) / Math.max(average, 1) < 0.35);
+      if (!stableAmounts) continue;
+
+      const gaps = [];
+      for (let index = 1; index < rows.length; index += 1) {
+        gaps.push(Math.round((transactionDate(rows[index].posted_date) - transactionDate(rows[index - 1].posted_date)) / 86400000));
+      }
+      gaps.sort((a, b) => a - b);
+      const gap = gaps[Math.floor(gaps.length / 2)];
+      let cadence = '';
+      if (gap >= 25 && gap <= 38) cadence = 'monthly';
+      else if (gap >= 12 && gap <= 18) cadence = 'biweekly';
+      else if (gap >= 5 && gap <= 9) cadence = 'weekly';
+      if (!cadence) continue;
+
+      const last = rows[rows.length - 1];
+      const next = new Date(transactionDate(last.posted_date));
+      next.setDate(next.getDate() + gap);
+      patterns.push({
+        name: last.merchant_name || last.name,
+        amount: average,
+        cadence,
+        next,
+        confidence: rows.length >= 3 ? 'high' : 'medium'
+      });
+    }
+    return patterns;
+  }
+
+  function calculate(data, dashboard) {
+    const transactions = data.transactions || [];
+    const now = new Date();
+    const currentMonth = monthKey(now);
+    const previousMonth = monthKey(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+    let spent = 0;
+    let previousSpent = 0;
+    let income = 0;
+    const categories = {};
+
+    for (const transaction of transactions) {
+      const key = monthKey(transactionDate(transaction.posted_date));
+      if (key === currentMonth && isSpend(transaction)) {
+        spent += Number(transaction.amount);
+        const category = classify(transaction);
+        categories[category] = (categories[category] || 0) + Number(transaction.amount);
+      }
+      if (key === previousMonth && isSpend(transaction)) previousSpent += Number(transaction.amount);
+      if (key === currentMonth && isIncome(transaction)) income += Math.abs(Number(transaction.amount));
+    }
+
+    const recurring = recurringPatterns(transactions);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    const upcoming = recurring.filter(item => item.next >= now && item.next <= monthEnd);
+    const upcomingBills = upcoming.reduce((sum, item) => sum + item.amount, 0);
+
+    const liquid = (data.accounts || [])
+      .filter(account => /checking|savings|depository|cash management|money market/i.test(`${account.account_type || ''} ${account.account_subtype || ''}`))
+      .reduce((sum, account) => sum + Number(account.available_balance ?? account.current_balance ?? 0), 0);
+
+    const plannedSavings = (dashboard.budget || [])
+      .filter(row => /saving|goal/i.test(row.name || ''))
+      .reduce((sum, row) => sum + Number(row.planned || 0), 0);
+
+    const takeHome = Number(dashboard.profile?.monthly_take_home || 0);
+    const safetyBuffer = Math.max(250, Math.min(Math.max(liquid, 0) * 0.15, takeHome * 0.1 || 500));
+    const safeToSpend = Math.max(0, liquid - upcomingBills - plannedSavings - safetyBuffer);
+
+    return {
+      spent,
+      previousSpent,
+      income,
+      categories,
+      recurring,
+      upcoming,
+      upcomingBills,
+      liquid,
+      plannedSavings,
+      safetyBuffer,
+      safeToSpend,
+      change: previousSpent ? ((spent - previousSpent) / previousSpent) * 100 : null
+    };
+  }
+
+  async function refresh() {
+    if (!token()) return;
+    try {
+      const headers = { Authorization: 'Bearer ' + token() };
+      const [financialResponse, dashboardResponse] = await Promise.all([
+        fetch('/api/financial-data', { headers }),
+        fetch('/api/dashboard', { headers })
+      ]);
+      if (!financialResponse.ok || !dashboardResponse.ok) return;
+      const financial = await financialResponse.json();
+      const dashboard = await dashboardResponse.json();
+      if (!financial.summary?.connected) return;
+
+      const intelligence = calculate(financial, dashboard);
+      window.__mccSmartBank = { financial, intelligence, classify };
+
+      const setText = (id, value) => {
+        const element = document.getElementById(id);
+        if (element) element.textContent = value;
+      };
+
+      setText('biSpend', formatMoney(intelligence.spent));
+      setText('biIncome', formatMoney(intelligence.income));
+      setText('biRecurring', formatMoney(intelligence.upcomingBills));
+      setText('biSafe', formatMoney(intelligence.safeToSpend));
+      setText('biHomeSpend', formatMoney(intelligence.spent));
+      setText('biHomeIncome', formatMoney(intelligence.income));
+      setText('biHomeRecurring', formatMoney(intelligence.upcomingBills));
+      setText('biHomeSafe', formatMoney(intelligence.safeToSpend));
+      setText('safe', formatMoney(intelligence.safeToSpend));
+      setText('budgetSafe', formatMoney(intelligence.safeToSpend));
+
+      const categoryList = document.getElementById('biCats');
+      if (categoryList) {
+        categoryList.innerHTML = Object.entries(intelligence.categories)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 8)
+          .map(([name, value]) => `<div class="item split"><span>${name}</span><strong>${formatMoney(value)}</strong></div>`)
+          .join('') || '<div class="empty">No spending yet.</div>';
+      }
+
+      const watch = document.getElementById('biWatch');
+      if (watch) {
+        watch.innerHTML = intelligence.upcoming
+          .slice(0, 6)
+          .map(item => `<div class="item"><strong>${item.name}</strong><span class="muted small">Likely ${formatMoney(item.amount)} ${item.cadence} · ${item.confidence} confidence · next around ${item.next.toLocaleDateString()}</span></div>`)
+          .join('') || '<div class="empty">No recurring patterns yet.</div>';
+      }
+    } catch (error) {
+      console.warn('Bank intelligence refresh failed', error);
+    }
+  }
+
+  function boot() {
+    if (token() && !document.getElementById('app')?.classList.contains('hidden')) refresh();
+  }
+
+  document.addEventListener('DOMContentLoaded', boot);
+  new MutationObserver(boot).observe(document.documentElement, {
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class']
+  });
+  window.mccRefreshSmartMoney = refresh;
 })();
