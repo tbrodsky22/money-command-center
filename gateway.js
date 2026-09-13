@@ -17,7 +17,7 @@ function copyHeaders(source){const h={};for(const [k,v] of Object.entries(source
 async function forward(req,res,body){
  const r=await fetch(`http://127.0.0.1:${innerPort}${req.url}`,{method:req.method,headers:copyHeaders(req.headers),body:['GET','HEAD'].includes(req.method)?undefined:body,redirect:'manual'});
  res.statusCode=r.status;for(const [k,v] of r.headers.entries()){if(['content-encoding','content-length','transfer-encoding','connection'].includes(k.toLowerCase()))continue;res.setHeader(k,v)}
- const b=Buffer.from(await r.arrayBuffer());res.setHeader('content-length',String(b.length));res.end(b)
+ let b=Buffer.from(await r.arrayBuffer());const ct=String(r.headers.get('content-type')||'');if(req.method==='GET'&&ct.includes('text/html')){let html=b.toString('utf8');if(!html.includes('/command-center-pro.js'))html=html.replace('</body>','<script src="/command-center-pro.js?v=1"></script>\n</body>');b=Buffer.from(html)}res.setHeader('content-length',String(b.length));res.end(b)
 }
 
 const server=http.createServer(async(req,res)=>{
