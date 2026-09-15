@@ -62,3 +62,20 @@ CREATE TABLE IF NOT EXISTS credit_score_history (
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_credit_score_history_user_date ON credit_score_history(user_id,recorded_at DESC);
+
+CREATE TABLE IF NOT EXISTS credit_reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL,
+  score INTEGER,
+  score_model TEXT,
+  reason_codes JSONB NOT NULL DEFAULT '[]'::jsonb,
+  tradelines JSONB NOT NULL DEFAULT '[]'::jsonb,
+  inquiries JSONB NOT NULL DEFAULT '[]'::jsonb,
+  negative_items JSONB NOT NULL DEFAULT '[]'::jsonb,
+  public_records JSONB NOT NULL DEFAULT '[]'::jsonb,
+  collections JSONB NOT NULL DEFAULT '[]'::jsonb,
+  encrypted_raw TEXT,
+  pulled_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_credit_reports_user_pulled ON credit_reports(user_id,pulled_at DESC);
