@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "scripts": {"start":"node gateway.js"},
+  "scripts": {"start":"node credit-gateway.js"},
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
